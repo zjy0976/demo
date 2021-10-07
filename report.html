@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 03-Oct-2021 at 17:01:28 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.10.0", "pytest": "6.2.5"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>macOS-11.5.2-arm64-arm-64bit</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.8.2</td></tr></table>
+    <h2>Summary</h2>
+    <p>2 tests ran in 1.33 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">2 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">0 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tetcase/test_product_details.py::test_product_details</td>
+          <td class="col-duration">0.98</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;errcode&quot;:0,&quot;errmsg&quot;:&quot;&quot;,&quot;data&quot;:{&quot;id&quot;:&quot;d3b92e17-addc-4b2f-aed9-3502525422f9&quot;,&quot;price&quot;:798,&quot;stock_quantity&quot;:5,&quot;spread_tag&quot;:20,&quot;market_price&quot;:1180,&quot;discount_rate&quot;:0.68,&quot;flash_sale_info&quot;:{&quot;store_product_id&quot;:&quot;d3b92e17-addc-4b2f-aed9-3502525422f9&quot;,&quot;event_id&quot;:&quot;15e17cc3-caff-4eec-98e1-ac03b9f957ef&quot;,&quot;quantity_each_person_limit&quot;:5,&quot;progress_rate&quot;:0.441860465,&quot;price&quot;:798},&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;0.95kg-1.1kg&quot;,&quot;order_remarks&quot;:[],&quot;activity_ids&quot;:[],&quot;product_id&quot;:&quot;95984b94-3ba3-44b1-9994-b757ef371c0b&quot;,&quot;name&quot;:&quot;国产红肉火龙果4-5个（家庭装）0.95kg-1.1kg&quot;,&quot;sub_title&quot;:&quot;清甜多汁 肉质细腻 若外观皱皮不喜勿拍&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1629166599395.png&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;origin&quot;:&quot;广西，海南东方&quot;,&quot;storage_condition&quot;:&quot;冷藏（0-4）℃&quot;,&quot;detail&quot;:&quot;&lt;div class=\&quot;media-wrap image-wrap\&quot;&gt;&lt;img class=\&quot;media-wrap image-wrap\&quot; src=\&quot;https://imgs.pupuapi.com/STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594623589772.jpg\&quot;/&gt;&lt;/div&gt;&lt;div class=\&quot;media-wrap image-wrap\&quot;&gt;&lt;img class=\&quot;media-wrap image-wrap\&quot; src=\&quot;https://imgs.pupuapi.com/STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594623592495.jpg\&quot;/&gt;&lt;/div&gt;&lt;div class=\&quot;media-wrap image-wrap\&quot;&gt;&lt;img class=\&quot;media-wrap image-wrap\&quot; src=\&quot;https://imgs.pupuapi.com/STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594623595323.jpg\&quot;/&gt;&lt;/div&gt;&lt;div class=\&quot;media-wrap image-wrap\&quot;&gt;&lt;img class=\&quot;media-wrap image-wrap\&quot; src=\&quot;https://imgs.pupuapi.com/STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594623599368.jpg\&quot;/&gt;&lt;/div&gt;&lt;div class=\&quot;media-wrap image-wrap\&quot;&gt;&lt;img class=\&quot;media-wrap image-wrap\&quot; src=\&quot;https://imgs.pupuapi.com/STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594623603017.jpg\&quot;/&gt;&lt;/div&gt;&lt;div class=\&quot;media-wrap image-wrap\&quot;&gt;&lt;img class=\&quot;media-wrap image-wrap\&quot; src=\&quot;https://imgs.pupuapi.com/STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594623605959.jpg\&quot;/&gt;&lt;/div&gt;&lt;div class=\&quot;media-wrap image-wrap\&quot;&gt;&lt;img class=\&quot;media-wrap image-wrap\&quot; src=\&quot;https://imgs.pupuapi.com/STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594623609802.jpg\&quot;/&gt;&lt;/div&gt;&lt;p&gt;&lt;img  src=\&quot;https://imgs.static.pupumall.com//common/qrcode_in_footer_1903.png\&quot; width=\&quot;100%\&quot;&gt;&lt;/p&gt;&quot;,&quot;share_url&quot;:&quot;https://m.pupumall.com/market/ShareProduct/Details?store_product_id=d3b92e17-addc-4b2f-aed9-3502525422f9&quot;,&quot;share_title&quot;:&quot;国产红肉火龙果4-5个（家庭装）0.95kg-1.1kg&quot;,&quot;share_content&quot;:&quot;0.95kg-1.1kg；清甜多汁 肉质细腻 若外观皱皮不喜勿拍。满19元免费配送到家，朴朴一下，又好又快&quot;,&quot;share_tip&quot;:&quot;发现一个好商品,给最关心的人&quot;,&quot;is_user_collection&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;每人限购5份&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7},{&quot;position&quot;:30,&quot;text&quot;:&quot;清甜多汁 肉质细腻 若外观皱皮不喜勿拍&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60},{&quot;position&quot;:50,&quot;text&quot;:&quot;¥11.8&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#BBBBBB&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:40,&quot;style&quot;:6,&quot;detail_position&quot;:10}],&quot;store_id&quot;:&quot;a3f5582f-7c6f-4c42-8736-72c8f9620656&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;is_weigh_buy&quot;:false,&quot;is_show_weigh_buy_price&quot;:false,&quot;coupon_title&quot;:{&quot;discount_keyword&quot;:&quot;限制&quot;,&quot;discount_content&quot;:[&quot;限时抢购商品不可使用优惠券&quot;],&quot;type&quot;:10},&quot;limit_msg&quot;:{&quot;title&quot;:&quot;限制&quot;,&quot;content&quot;:&quot;限时抢购商品不可使用优惠券，每人限购5份&quot;,&quot;title_background_colors&quot;:[&quot;#BBBBBB&quot;,&quot;#AAAAAA&quot;]},&quot;upload_images&quot;:[{&quot;id&quot;:&quot;33493a90-6d79-4ded-b4d6-881eef13f728&quot;,&quot;url&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1629166602002.png&quot;},{&quot;id&quot;:&quot;88c874cd-c23d-4c66-a5b6-0bbe69b0a701&quot;,&quot;url&quot;:&quot;STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594623582156.jpg&quot;}],&quot;activities&quot;:[],&quot;product_rank&quot;:null,&quot;is_advance_sale&quot;:false}}
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tetcase/test_search_products.py::test_search_product</td>
+          <td class="col-duration">0.28</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>{&quot;errcode&quot;:0,&quot;errmsg&quot;:&quot;&quot;,&quot;data&quot;:{&quot;count&quot;:10,&quot;count_desc&quot;:&quot;(约10件)&quot;,&quot;products&quot;:[{&quot;id&quot;:&quot;d3b92e17-addc-4b2f-aed9-3502525422f9&quot;,&quot;price&quot;:798,&quot;stock_quantity&quot;:5,&quot;spread_tag&quot;:20,&quot;market_price&quot;:1180,&quot;discount_rate&quot;:0.68,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:{&quot;store_product_id&quot;:&quot;d3b92e17-addc-4b2f-aed9-3502525422f9&quot;,&quot;event_id&quot;:&quot;15e17cc3-caff-4eec-98e1-ac03b9f957ef&quot;,&quot;quantity_each_person_limit&quot;:5,&quot;progress_rate&quot;:0.441860465,&quot;price&quot;:798},&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;0.95kg-1.1kg&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;95984b94-3ba3-44b1-9994-b757ef371c0b&quot;,&quot;name&quot;:&quot;国产红肉火龙果4-5个（家庭装）0.95kg-1.1kg&quot;,&quot;sub_title&quot;:&quot;清甜多汁 肉质细腻 若外观皱皮不喜勿拍&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1629166599395.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1629166599395.png&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:1098,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;广西，海南东方&quot;,&quot;stock_quantity_tag&quot;:&quot;&quot;,&quot;tax_category_id&quot;:&quot;16b78dd9-6f08-4064-981a-c800f39207ad&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;每人限购5份&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7},{&quot;position&quot;:50,&quot;text&quot;:&quot;¥11.8&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#BBBBBB&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:40,&quot;style&quot;:6,&quot;detail_position&quot;:10},{&quot;position&quot;:20,&quot;text&quot;:&quot;限时购&quot;,&quot;bg_color&quot;:&quot;#FF444D&quot;,&quot;text_color&quot;:&quot;#FFFFFF&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:10,&quot;style&quot;:2}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;da6c2fcd-3789-490c-9989-7afc1d03a835&quot;,&quot;price&quot;:590,&quot;stock_quantity&quot;:1,&quot;spread_tag&quot;:0,&quot;market_price&quot;:898,&quot;discount_rate&quot;:0.66,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;600g-700g/2个&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;299bc3fd-abe4-4ee0-b1ff-58acbcc0ef4f&quot;,&quot;name&quot;:&quot;国产红心火龙果（家庭装）600g-700g/2个&quot;,&quot;sub_title&quot;:&quot;表皮略皱更好吃&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1623219278187.png?x-oss-process=image/format,jpg,image/resize,h_720/watermark,image_U0NFTkVTX0JHLzI1YmMwM2FjMGZkYjRlZmRiOTY0NDhlYmMwZGQzN2E0LzE2MzI5OTg3NDg0ODEucG5nP3gtb3NzLXByb2Nlc3M9aW1hZ2UvcmVzaXplLFBfMTAw,t_100,g_center,x_0,y_0#&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1623219278187.png&quot;,&quot;custom_tag_background_color&quot;:&quot;#e63c3c&quot;,&quot;custom_tag_text&quot;:&quot;外观会皱皮&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;6.6折&quot;,&quot;price_guide&quot;:799,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;海南省&quot;,&quot;stock_quantity_tag&quot;:&quot;&quot;,&quot;tax_category_id&quot;:&quot;16b78dd9-6f08-4064-981a-c800f39207ad&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;表皮略皱更好吃&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60},{&quot;position&quot;:10,&quot;text&quot;:&quot;&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;&quot;,&quot;images&quot;:[{&quot;type&quot;:10,&quot;url&quot;:&quot;SCENES_BG/25bc03ac0fdb4efdb96448ebc0dd37a4/1632998748481.png&quot;,&quot;image_height&quot;:0,&quot;image_width&quot;:0},{&quot;type&quot;:30,&quot;url&quot;:&quot;&quot;,&quot;image_height&quot;:0,&quot;image_width&quot;:0}],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:60,&quot;style&quot;:1},{&quot;position&quot;:50,&quot;text&quot;:&quot;6.6折&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#FF7B00&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:40,&quot;style&quot;:7,&quot;detail_position&quot;:10}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;e64ed642-753a-4f07-a792-0b5234de755a&quot;,&quot;price&quot;:698,&quot;stock_quantity&quot;:20,&quot;spread_tag&quot;:0,&quot;market_price&quot;:698,&quot;discount_rate&quot;:1.0,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;440g-490g/个&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;e945ed5c-f42f-4e87-99c9-61971f4474d1&quot;,&quot;name&quot;:&quot;越南白肉火龙果（中果）440g-490g/个&quot;,&quot;sub_title&quot;:&quot;皮薄肉厚 细嫩爽滑 &quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594626173336.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1594626173336.png&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:698,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;越南&quot;,&quot;stock_quantity_tag&quot;:&quot;即将售罄&quot;,&quot;tax_category_id&quot;:&quot;f645c36e-8c19-447e-a111-a350fe57e027&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;皮薄肉厚 细嫩爽滑 &quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;fa4217b5-0aea-48e4-a8eb-1ae7bf85199b&quot;,&quot;price&quot;:498,&quot;stock_quantity&quot;:1,&quot;spread_tag&quot;:0,&quot;market_price&quot;:598,&quot;discount_rate&quot;:0.83,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;295g-395g/个&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;eec1507b-d568-44e4-b971-3ad52e348b65&quot;,&quot;name&quot;:&quot;国产红心火龙果295g-395g/个&quot;,&quot;sub_title&quot;:&quot;果已成熟 外观皱皮暗红（外观皱皮不喜勿拍）&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1623219257901.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1623219257901.png&quot;,&quot;custom_tag_background_color&quot;:&quot;#e63c3c&quot;,&quot;custom_tag_text&quot;:&quot;外观会皱皮（中果）&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:498,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;海南省&quot;,&quot;stock_quantity_tag&quot;:&quot;仅剩1件&quot;,&quot;tax_category_id&quot;:&quot;16b78dd9-6f08-4064-981a-c800f39207ad&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;果已成熟 外观皱皮暗红（外观皱皮不喜勿拍）&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60},{&quot;position&quot;:50,&quot;text&quot;:&quot;¥5.98&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#BBBBBB&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:40,&quot;style&quot;:6,&quot;detail_position&quot;:10}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;1f82dbfa-cfed-4602-8e9c-e5601c9672bf&quot;,&quot;price&quot;:688,&quot;stock_quantity&quot;:5,&quot;spread_tag&quot;:0,&quot;market_price&quot;:798,&quot;discount_rate&quot;:0.86,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;395g-500g/个&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;afad489f-bf2a-4abc-9206-410393e586de&quot;,&quot;name&quot;:&quot;国产红心火龙果（大果）395g-500g/个&quot;,&quot;sub_title&quot;:&quot;外观皱皮 叶子暗红  不喜勿拍&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1623219229404.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1623219229404.png&quot;,&quot;custom_tag_background_color&quot;:&quot;#e63c3c&quot;,&quot;custom_tag_text&quot;:&quot;外观会皱皮&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:688,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;海南省&quot;,&quot;stock_quantity_tag&quot;:&quot;即将售罄&quot;,&quot;tax_category_id&quot;:&quot;16b78dd9-6f08-4064-981a-c800f39207ad&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;外观皱皮 叶子暗红  不喜勿拍&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60},{&quot;position&quot;:50,&quot;text&quot;:&quot;¥7.98&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#BBBBBB&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:40,&quot;style&quot;:6,&quot;detail_position&quot;:10}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;3b70ffd2-06cf-4891-9c1b-867ae83fbb3f&quot;,&quot;price&quot;:3990,&quot;stock_quantity&quot;:2,&quot;spread_tag&quot;:0,&quot;market_price&quot;:6500,&quot;discount_rate&quot;:0.61,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;2.5kg±50g/箱&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;4a56f84b-2b25-42de-8db3-85171e950e22&quot;,&quot;name&quot;:&quot;国产红心火龙果礼盒2.5kg±50g/箱&quot;,&quot;sub_title&quot;:&quot;清甜多汁 肉质细腻 有礼有面&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1626778655350.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1626778655350.png&quot;,&quot;custom_tag_background_color&quot;:&quot;#429ed9&quot;,&quot;custom_tag_text&quot;:&quot;0-4℃冷藏&quot;,&quot;custom_tag_is_enabled&quot;:true,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:3990,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;海南东方&quot;,&quot;stock_quantity_tag&quot;:&quot;仅剩2件&quot;,&quot;tax_category_id&quot;:&quot;16b78dd9-6f08-4064-981a-c800f39207ad&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;清甜多汁 肉质细腻 有礼有面&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60},{&quot;position&quot;:50,&quot;text&quot;:&quot;¥65&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#BBBBBB&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:40,&quot;style&quot;:6,&quot;detail_position&quot;:10},{&quot;position&quot;:40,&quot;text&quot;:&quot;0-4℃冷藏&quot;,&quot;bg_color&quot;:&quot;#EBFEF3&quot;,&quot;text_color&quot;:&quot;#17B356&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:30,&quot;style&quot;:4,&quot;detail_position&quot;:30}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;1b91f72b-4211-447c-81a6-41fc1ee6cee1&quot;,&quot;price&quot;:890,&quot;stock_quantity&quot;:40,&quot;spread_tag&quot;:0,&quot;market_price&quot;:980,&quot;discount_rate&quot;:0.91,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;90g/包&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;43e11d5d-6ef5-4c6b-bc41-cac88d46346f&quot;,&quot;name&quot;:&quot;酸弟南酸枣糕火龙果味90g&quot;,&quot;sub_title&quot;:&quot;野果制作，无添加，酸甜注消化，好吃不上火&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/cdc41a95115f4fdab25c4bf36a554162/1630055454035.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/cdc41a95115f4fdab25c4bf36a554162/1630055454035.png&quot;,&quot;custom_tag_background_color&quot;:&quot;&quot;,&quot;custom_tag_text&quot;:&quot;&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:890,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;四川省宜宾市&quot;,&quot;stock_quantity_tag&quot;:&quot;&quot;,&quot;tax_category_id&quot;:&quot;3e1bc6f0-63ef-406b-baac-ff49ff4998b4&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;野果制作，无添加，酸甜注消化，好吃不上火&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60},{&quot;position&quot;:50,&quot;text&quot;:&quot;¥9.8&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#BBBBBB&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:40,&quot;style&quot;:6,&quot;detail_position&quot;:10}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;8d150fb7-b29a-43dc-b887-670799b23535&quot;,&quot;price&quot;:990,&quot;stock_quantity&quot;:5,&quot;spread_tag&quot;:0,&quot;market_price&quot;:990,&quot;discount_rate&quot;:1.0,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;500g/份&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;34f26937-b898-4005-a98c-80b7120a81bb&quot;,&quot;name&quot;:&quot;泰国进口龙眼500g/份&quot;,&quot;sub_title&quot;:&quot;皮薄 脆嫩 甜蜜&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1592271245878.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/448ca49018a0460b9d24e541e10d6aba/1592271245878.png&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:990,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;泰国&quot;,&quot;stock_quantity_tag&quot;:&quot;仅剩5件&quot;,&quot;tax_category_id&quot;:&quot;5482aca0-9944-476c-9378-aacd05d4ee07&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;皮薄 脆嫩 甜蜜&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;b03a30f5-cd3a-457e-867e-2263fde74d90&quot;,&quot;price&quot;:1250,&quot;stock_quantity&quot;:20,&quot;spread_tag&quot;:0,&quot;market_price&quot;:1250,&quot;discount_rate&quot;:1.0,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;240g/包&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;cb111e1f-1dd6-40b1-ad3e-002ecf594153&quot;,&quot;name&quot;:&quot;卧龙老灶锅巴麻辣味240g&quot;,&quot;sub_title&quot;:&quot;香酥入味，麻辣鲜爽&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1627797507015.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1627797507015.png&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:1250,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;湖北省襄阳市&quot;,&quot;stock_quantity_tag&quot;:&quot;即将售罄&quot;,&quot;tax_category_id&quot;:&quot;c2fb1cf5-f5e8-4040-8f47-70e7a4beee9f&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;香酥入味，麻辣鲜爽&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60}],&quot;is_hide_spu&quot;:true},{&quot;id&quot;:&quot;26352879-1173-4993-963e-20a4d80f0d1a&quot;,&quot;price&quot;:1250,&quot;stock_quantity&quot;:16,&quot;spread_tag&quot;:0,&quot;market_price&quot;:1290,&quot;discount_rate&quot;:0.97,&quot;activity_ids&quot;:[],&quot;flash_sale_info&quot;:null,&quot;sell_batches&quot;:[],&quot;spec&quot;:&quot;218g/包&quot;,&quot;order_remarks&quot;:[],&quot;product_id&quot;:&quot;04c16428-a28c-4efa-b40e-e52c436aa1bc&quot;,&quot;name&quot;:&quot;卧龙猫耳朵五香味218g&quot;,&quot;sub_title&quot;:&quot;脆脆香香，口口酥脆美味&quot;,&quot;main_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1627797740317.png&quot;,&quot;product_original_image&quot;:&quot;STORE_PRODUCT/7e2fcd404204420e8cfce6ef20c9431c/1627797740317.png&quot;,&quot;custom_tag_is_enabled&quot;:false,&quot;purchase_type&quot;:0,&quot;recommendation_image&quot;:&quot;&quot;,&quot;discount_label&quot;:&quot;&quot;,&quot;price_guide&quot;:1250,&quot;is_plan_off_shelf&quot;:false,&quot;is_weigh_buy&quot;:false,&quot;origin&quot;:&quot;湖北省襄阳市&quot;,&quot;stock_quantity_tag&quot;:&quot;仅剩16件&quot;,&quot;tax_category_id&quot;:&quot;c2fb1cf5-f5e8-4040-8f47-70e7a4beee9f&quot;,&quot;is_advance_sale&quot;:false,&quot;labels&quot;:[{&quot;position&quot;:30,&quot;text&quot;:&quot;脆脆香香，口口酥脆美味&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#AAAAAA&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:50,&quot;style&quot;:7,&quot;detail_position&quot;:60},{&quot;position&quot;:50,&quot;text&quot;:&quot;¥12.9&quot;,&quot;bg_color&quot;:&quot;&quot;,&quot;text_color&quot;:&quot;#BBBBBB&quot;,&quot;images&quot;:[],&quot;link_router&quot;:&quot;&quot;,&quot;type&quot;:40,&quot;style&quot;:6,&quot;detail_position&quot;:10}],&quot;is_hide_spu&quot;:true}],&quot;activities&quot;:[],&quot;correct_term&quot;:&quot;火龙果&quot;,&quot;show_recommend&quot;:true,&quot;show_menu&quot;:true,&quot;relevance_extend_product_id_list&quot;:[&quot;7bb36d33-fdef-4638-84bd-55c1110b92f0:search_rec_embedding&quot;,&quot;717c7b8c-74fe-427b-95bf-ec78f8c5ef97:search_rec_taxcate&quot;,&quot;380a53e2-1f63-4bf9-9fcb-231953ff72bd:search_rec_taxcate&quot;,&quot;629b8e0e-6eae-4559-9a0f-58319a915293:search_rec_embedding&quot;,&quot;c2bbd3a4-7fce-46c3-949a-0cf95f99c9bb:search_rec_embedding&quot;,&quot;ed7bbf67-5b68-46df-b9e4-d9abbb507fe4:search_rec_taxcate&quot;,&quot;6449d27a-f3ff-481c-90a5-58fdb0ec6197:search_rec_taxcate,search_rec_embedding&quot;,&quot;484daf96-e380-492d-ac17-6dfdc6abebad:search_rec_taxcate&quot;,&quot;ff7d37c7-decc-4a9b-8227-b99b5279d662:search_rec_taxcate&quot;,&quot;bafd34d9-a59d-42d8-8a28-7dff37fd895a:search_rec_taxcate&quot;,&quot;f47fe02e-05f7-4820-bdb9-0b381ae330bb:search_rec_taxcate&quot;,&quot;c4b510e8-dc3c-4a7b-96cc-90fee8391078:search_rec_i2i&quot;,&quot;81afe3a8-7f3f-433c-a47a-9ed0ed366c28:search_rec_taxcate&quot;,&quot;f9b9a207-2651-4619-b9ac-0dbe84dba69d:search_rec_embedding,search_rec_taxcate&quot;,&quot;6a00a612-505f-4b48-9cc8-b34875082480:search_rec_taxcate&quot;,&quot;e77ae9a2-b59e-4bc8-82eb-504a813371b7:search_rec_taxcate,search_rec_embedding&quot;,&quot;ef7cd240-9840-4fa2-9423-b19b4be6a1f1:search_rec_embedding&quot;,&quot;0254e598-c214-4acd-8e18-bb12f75a8ebf:search_rec_taxcate,search_rec_embedding&quot;,&quot;cfb1d787-19b0-47cb-93c0-922fd799c54d:search_rec_taxcate&quot;,&quot;f3dc689d-591a-4eda-8604-985ce1806b66:search_rec_taxcate&quot;,&quot;5fe9c181-dabb-429b-ae06-91b810428e49:search_rec_embedding,search_rec_taxcate&quot;,&quot;af107da4-1bcb-471c-9e7e-84e4108c2466:search_rec_taxcate&quot;,&quot;6f7c054f-d2ef-4da0-808a-bbe6cc065eef:search_rec_embedding&quot;,&quot;bc32d0fe-9d2e-40c3-977f-0418b5bdad28:search_rec_taxcate,search_rec_embedding&quot;,&quot;e15f8ca9-f40e-4438-8a7a-5550acdf1b67:search_rec_taxcate&quot;,&quot;c43666d2-6a82-4d62-bf8d-8cebcfffe7c8:search_rec_embedding&quot;,&quot;20f45ff9-2186-4e38-854b-83d76eaa9f02:search_rec_taxcate&quot;,&quot;e944c760-1182-41a8-a071-f6e21ebfea0d:search_rec_taxcate&quot;,&quot;fad08423-9268-4aac-a17c-482cc3e3269c:search_rec_embedding&quot;,&quot;f82fc47b-a62a-443f-97c8-8cc178adeb82:search_rec_embedding&quot;,&quot;0ed35472-a3c0-4a9b-bb16-318fa9fadffd:search_rec_embedding&quot;,&quot;dba5d660-79c4-4c7c-811a-290ec66998f5:search_rec_embedding&quot;,&quot;f1472eac-1112-456f-887d-8a85e663a1be:search_rec_embedding&quot;,&quot;1ce443c5-d7c1-4420-a9c9-f866d2c44d1d:search_rec_embedding&quot;,&quot;d32d48d9-9052-49f8-8a0e-d5b3c5387a02:search_rec_embedding&quot;,&quot;5818db67-f93d-4bfc-b4f1-ed5e887c98b0:search_rec_embedding&quot;,&quot;12850d08-2901-4122-a702-597f3b25f7d0:search_rec_embedding&quot;,&quot;884c62bc-2623-460b-bb4d-0fe47b993c5d:search_rec_embedding&quot;,&quot;b0d23804-153a-459c-acbc-faf00a02085f:search_rec_embedding&quot;,&quot;c283d2b1-ee01-450a-ac86-d0b0c8e614fd:search_rec_embedding&quot;],&quot;recommend_words&quot;:[&quot;香蕉&quot;,&quot;苹果&quot;,&quot;猕猴桃&quot;,&quot;柚子&quot;,&quot;酸奶&quot;,&quot;奇异果&quot;],&quot;fold&quot;:{&quot;is_open&quot;:true,&quot;min_count&quot;:5,&quot;min_stock_out&quot;:2}}}
+<br/></div></td></tr></tbody></table></body></html>
